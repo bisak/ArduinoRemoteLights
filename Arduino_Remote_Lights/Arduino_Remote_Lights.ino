@@ -1,77 +1,78 @@
 #include <IRremote.h>
 
-const int LIGHTS_PIN = 5;
-const int DOWN_BNT_PIN = 6;
-const int UP_BNT_PIN = 7;
+const int LIGHTS_PIN = 6;
+const int POT_PIN = A0;
 const int RECV_PIN = 11;
 
+const long long MAX_IR_VAL = 3772834333;
+const long long MIN_IR_VAL = 3772797613;
+const long long DEC_IR_VAL_1 = 3772781293;
+const long long DEC_IR_VAL_2 = 3772805773;
+const long long INC_IR_VAL_1 = 3772818013;
+const long long INC_IR_VAL_2 = 3772779253;
+
 int brightness = 0;
+int potVal = 0;
+int initialPotVal = 0;
 
 IRrecv irrecv(RECV_PIN);
 decode_results results;
 
-void setup()
-{
-  Serial.begin(9600);
-  irrecv.enableIRIn();
-  pinMode(LIGHTS_PIN, OUTPUT);
-  pinMode(DOWN_BNT_PIN, INPUT_PULLUP);
-  pinMode(UP_BNT_PIN, INPUT_PULLUP);
-  analogWrite(LIGHTS_PIN, brightness);
-}
-
-void loop() {
-
+void handleIR() {
   if (irrecv.decode(&results)) {
-    //Used so serial light blinks when data is received
-    Serial.println(results.value);
-    irrecv.resume();
-    if (results.value == 3772834333) {
+    
+    if (results.value == MAX_IR_VAL) {
       brightness = 255;
     }
 
-    if (results.value == 3772797613) {
+    if (results.value == MIN_IR_VAL) {
       brightness = 0;
     }
 
-    //Added additional values for the same button
-    if ((results.value == 3772781293 || results.value == 3772805773) && brightness < 255) {
-      brightness += 51;
+    if (results.value == DEC_IR_VAL_1 || results.value == DEC_IR_VAL_2 ) {
+      brightness = constrain(brightness + 5, 0, 255);
     }
 
-    //Added additional values for the same button
-    if ((results.value == 3772818013 || results.value == 3772779253) && brightness > 0) {
-      brightness -= 51;
+    if (results.value == INC_IR_VAL_1 || results.value == INC_IR_VAL_2 ) {
+      brightness = constrain(brightness - 5, 0, 255);
     }
+    
+    irrecv.resume();
   }
-
-  if (digitalRead(UP_BNT_PIN) == 0 && brightness < 255 ) {
-    if (brightness > 127) {
-      brightness += 10;
-    } else {
-      brightness += 5;
-    }
-  }
-
-  if (digitalRead(DOWN_BNT_PIN) == 0 && brightness > 0 ) {
-    if (brightness > 127) {
-      brightness -= 10;
-    } else {
-      brightness -= 5;
-    }
-  }
-
-  if (brightness > 255) {
-    brightness = 255;
-  }
-  if (brightness < 0) {
-    brightness = 0;
-  }
-  analogWrite(LIGHTS_PIN, brightness);
-  delay(50);
 }
 
-//3772834333  <-- start
-//3772797613  <-- stop
-//3772781293 AND 3772805773 <-- increase
-//3772818013 AND 3772779253  <-- decrease
+void handlePot() {
+  int currentPotVal = getPotVal();
+  // First conditions takes care of potentiometer fluctuations
+  // Second condition checks if the pot is touched so it doesnt assing a value if the system is just turned on
+  if ((currentPotVal < potVal - 3 || currentPotVal > potVal + 3) && initialPotVal != currentPotVal) { 
+    brightness = currentPotVal;
+    if (brightness < 5) {
+      brightness = 0;
+    } else if (brightness > 250) {
+      brightness = 255;
+    }
+    potVal = currentPotVal;
+    initialPotVal = 12345;
+  }
+}
+
+int getPotVal() {
+  return map(analogRead(POT_PIN), 0, 1023, 0, 255);
+}
+
+void setup()
+{
+  irrecv.enableIRIn();
+  pinMode(LIGHTS_PIN, OUTPUT);
+  pinMode(POT_PIN, INPUT);
+  analogWrite(LIGHTS_PIN, brightness);
+  initialPotVal = getPotVal();
+}
+
+void loop() {
+  handleIR();
+  handlePot();
+  analogWrite(LIGHTS_PIN, brightness);
+}
+
